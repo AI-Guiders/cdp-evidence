@@ -54,6 +54,24 @@ public sealed class EvidenceProjectTests
     }
 
     [Fact]
+    public void Slim_default_omits_extra_warnings()
+    {
+        var text = string.Join('\n',
+            Enumerable.Range(1, 10).Select(i => $@"D:\src\Foo.cs({i},1): warning CS0168: unused{i}"));
+        var slim = EvidencePreprocess.Project("build", text, new EvidenceContext { ProjectRoot = @"D:\src" });
+        Assert.True(slim.Ok);
+        Assert.Equal(3, slim.ItemCount);
+        Assert.Equal("warnings_omitted_7", slim.Note);
+
+        var fat = EvidencePreprocess.Project(
+            "build",
+            text,
+            new EvidenceContext { ProjectRoot = @"D:\src", IncludeWarnings = true, MaxItems = 80 });
+        Assert.Equal(10, fat.ItemCount);
+        Assert.Null(fat.Note);
+    }
+
+    [Fact]
     public void ToJson_roundtrips_schema()
     {
         var doc = EvidencePreprocess.Project("build", @"X.cs(2): warning CS0168: unused");

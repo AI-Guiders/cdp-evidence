@@ -86,6 +86,9 @@ public static class EvidencePreprocess
 
             foreach (var buildish in MsBuildExtractor.Extract(rawOutput, ctx))
             {
+                var isError = buildish.Severity.Equals("error", StringComparison.OrdinalIgnoreCase);
+                if (!isError && !ctx.IncludeWarnings)
+                    continue;
                 if (items.Any(i => i.Anchor == buildish.Anchor))
                     continue;
                 items.Add(buildish);
@@ -162,12 +165,26 @@ public static class EvidencePreprocess
         EvidenceContext ctx)
     {
         items = Dedup(items);
+        var errors = items
+            .Where(i => i.Severity.Equals("error", StringComparison.OrdinalIgnoreCase))
+            .ToList();
+        var warnings = items
+            .Where(i => !i.Severity.Equals("error", StringComparison.OrdinalIgnoreCase))
+            .ToList();
+        var warningTotal = warnings.Count;
+        if (!ctx.IncludeWarnings)
+        {
+            var warnCap = Math.Clamp(ctx.MaxWarnings, 0, 50);
+            warnings = warnings.Take(warnCap).ToList();
+        }
+
+        items = errors.Concat(warnings).ToList();
         var max = Math.Clamp(ctx.MaxItems, 1, 500);
         var truncated = items.Count > max;
         if (truncated)
             items = items.Take(max).ToList();
 
-        var errors = items.Count(i => i.Severity.Equals("error", StringComparison.OrdinalIgnoreCase));
+        var errorCount = items.Count(i => i.Severity.Equals("error", StringComparison.OrdinalIgnoreCase));
         string? residual = null;
         if (residualSource is { Length: > 0 } && items.Count == 0)
         {
@@ -177,11 +194,16 @@ public static class EvidencePreprocess
                 : residualSource[..cap] + "…";
         }
 
-        var note = truncated ? $"truncated_to_{max}" : null;
+        string? note = null;
+        if (truncated)
+            note = $"truncated_to_{max}";
+        else if (!ctx.IncludeWarnings && warningTotal > warnings.Count)
+            note = $"warnings_omitted_{warningTotal - warnings.Count}";
+
         return new EvidenceDocument(
             EvidenceSchema.Version,
             EvidenceDocument.SourceName(source),
-            Ok: errors == 0,
+            Ok: errorCount == 0,
             ItemCount: items.Count,
             Items: items,
             Residual: residual,

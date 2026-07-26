@@ -24,8 +24,11 @@ public sealed record EvidenceContext(
     string? ProjectRoot = null,
     string? SolutionOrProjectPath = null,
     Func<string, string>? RemapPath = null,
-    int MaxItems = 80,
-    int MaxResidualChars = 4_000);
+    int MaxItems = 24,
+    int MaxResidualChars = 4_000,
+    // When false (default): keep errors + at most MaxWarnings warnings.
+    bool IncludeWarnings = false,
+    int MaxWarnings = 3);
 
 public sealed record EvidenceItem(
     string Severity,
